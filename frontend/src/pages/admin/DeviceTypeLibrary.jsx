@@ -108,16 +108,173 @@ StreamDefinitionsEditor.propTypes = {
 };
 
 // ---------------------------------------------------------------------------
-// Command sub-form (list of {name, label, description})
+// Param editor — one row per param inside a command
+// {key, label, type, min, max, unit, default}
+// ---------------------------------------------------------------------------
+
+const PARAM_TYPE_OPTIONS = ['int', 'float', 'string', 'bool'];
+const NUMERIC_PARAM_TYPES = ['int', 'float'];
+
+function ParamsEditor({ value, onChange, disabled }) {
+  /**
+   * Inline editor for the params array of a single command.
+   * Each param: {key, label, type, min?, max?, unit?, default?}
+   */
+  const handleChange = (index, field, fieldValue) => {
+    const updated = value.map((p, i) => {
+      if (i !== index) return p;
+      const next = { ...p, [field]: fieldValue };
+      // Clear numeric-only fields when switching to a non-numeric type
+      if (field === 'type' && !NUMERIC_PARAM_TYPES.includes(fieldValue)) {
+        delete next.min;
+        delete next.max;
+        delete next.unit;
+      }
+      return next;
+    });
+    onChange(updated);
+  };
+
+  const handleAdd = () => {
+    onChange([...value, { key: '', label: '', type: 'int' }]);
+  };
+
+  const handleRemove = (index) => {
+    onChange(value.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div style={{ marginTop: '0.5rem' }}>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
+        Parameters
+      </p>
+      {value.map((param, index) => {
+        const isNumeric = NUMERIC_PARAM_TYPES.includes(param.type);
+        return (
+          <div
+            key={index}
+            style={{
+              background: 'var(--surface-raised, #f9f9f9)',
+              border: '1px solid var(--border)',
+              borderRadius: 4,
+              padding: '0.5rem',
+              marginBottom: '0.4rem',
+            }}
+          >
+            {/* Row 1: key, label, type, remove */}
+            <div className={styles.inlineFields}>
+              <input
+                type="text"
+                placeholder="key (e.g. speed)"
+                value={param.key || ''}
+                onChange={(e) => handleChange(index, 'key', e.target.value)}
+                className={styles.input}
+                disabled={disabled}
+              />
+              <input
+                type="text"
+                placeholder="label (e.g. Speed)"
+                value={param.label || ''}
+                onChange={(e) => handleChange(index, 'label', e.target.value)}
+                className={styles.input}
+                disabled={disabled}
+              />
+              <select
+                value={param.type || 'int'}
+                onChange={(e) => handleChange(index, 'type', e.target.value)}
+                className={styles.input}
+                disabled={disabled}
+              >
+                {PARAM_TYPE_OPTIONS.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.dangerButton}
+                onClick={() => handleRemove(index)}
+                disabled={disabled}
+              >
+                Remove
+              </button>
+            </div>
+            {/* Row 2: numeric constraints + unit + default */}
+            <div className={styles.inlineFields} style={{ marginTop: '0.4rem' }}>
+              {isNumeric && (
+                <>
+                  <input
+                    type="number"
+                    placeholder="min"
+                    value={param.min ?? ''}
+                    onChange={(e) =>
+                      handleChange(index, 'min', e.target.value === '' ? undefined : Number(e.target.value))
+                    }
+                    className={styles.input}
+                    disabled={disabled}
+                  />
+                  <input
+                    type="number"
+                    placeholder="max"
+                    value={param.max ?? ''}
+                    onChange={(e) =>
+                      handleChange(index, 'max', e.target.value === '' ? undefined : Number(e.target.value))
+                    }
+                    className={styles.input}
+                    disabled={disabled}
+                  />
+                  <input
+                    type="text"
+                    placeholder="unit (e.g. %)"
+                    value={param.unit || ''}
+                    onChange={(e) => handleChange(index, 'unit', e.target.value)}
+                    className={styles.input}
+                    disabled={disabled}
+                  />
+                </>
+              )}
+              <input
+                type="text"
+                placeholder="default value (optional)"
+                value={param.default ?? ''}
+                onChange={(e) =>
+                  handleChange(index, 'default', e.target.value === '' ? undefined : e.target.value)
+                }
+                className={styles.input}
+                disabled={disabled}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        className={styles.secondaryButton}
+        onClick={handleAdd}
+        disabled={disabled}
+        style={{ fontSize: '0.85rem' }}
+      >
+        + Add parameter
+      </button>
+    </div>
+  );
+}
+
+ParamsEditor.propTypes = {
+  value: PropTypes.arrayOf(PropTypes.object).isRequired,
+  onChange: PropTypes.func.isRequired,
+  disabled: PropTypes.bool,
+};
+
+// ---------------------------------------------------------------------------
+// Command editor — list of {name, label, description, params[]}
 // ---------------------------------------------------------------------------
 
 function CommandsEditor({ value, onChange, disabled }) {
   /**
-   * Inline editor for commands array.
-   * Each entry: {name, label, description}
-   * Params are entered as JSON for now (complex nested structure).
+   * Inline editor for the commands array on a DeviceType.
+   * Each command: {name, label, description, params: [...]}
    */
-  const handleChange = (index, field, fieldValue) => {
+  const handleCommandChange = (index, field, fieldValue) => {
     const updated = value.map((item, i) =>
       i === index ? { ...item, [field]: fieldValue } : item
     );
@@ -135,21 +292,30 @@ function CommandsEditor({ value, onChange, disabled }) {
   return (
     <div>
       {value.map((cmd, index) => (
-        <div key={index} style={{ border: '1px solid var(--border)', borderRadius: 4, padding: '0.75rem', marginBottom: '0.5rem' }}>
+        <div
+          key={index}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            padding: '0.75rem',
+            marginBottom: '0.5rem',
+          }}
+        >
+          {/* Command name, label, remove */}
           <div className={styles.inlineFields}>
             <input
               type="text"
-              placeholder="name (e.g. set_relay)"
-              value={cmd.name}
-              onChange={(e) => handleChange(index, 'name', e.target.value)}
+              placeholder="name (e.g. set_fan_speed)"
+              value={cmd.name || ''}
+              onChange={(e) => handleCommandChange(index, 'name', e.target.value)}
               className={styles.input}
               disabled={disabled}
             />
             <input
               type="text"
-              placeholder="label (e.g. Set Relay)"
-              value={cmd.label}
-              onChange={(e) => handleChange(index, 'label', e.target.value)}
+              placeholder="label (e.g. Set Fan Speed)"
+              value={cmd.label || ''}
+              onChange={(e) => handleCommandChange(index, 'label', e.target.value)}
               className={styles.input}
               disabled={disabled}
             />
@@ -162,16 +328,23 @@ function CommandsEditor({ value, onChange, disabled }) {
               Remove
             </button>
           </div>
+          {/* Description */}
           <div className={styles.field} style={{ marginTop: '0.5rem' }}>
             <input
               type="text"
               placeholder="description (optional)"
-              value={cmd.description}
-              onChange={(e) => handleChange(index, 'description', e.target.value)}
+              value={cmd.description || ''}
+              onChange={(e) => handleCommandChange(index, 'description', e.target.value)}
               className={styles.input}
               disabled={disabled}
             />
           </div>
+          {/* Params */}
+          <ParamsEditor
+            value={cmd.params || []}
+            onChange={(params) => handleCommandChange(index, 'params', params)}
+            disabled={disabled}
+          />
         </div>
       ))}
       <button
