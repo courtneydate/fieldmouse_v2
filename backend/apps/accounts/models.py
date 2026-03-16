@@ -113,3 +113,69 @@ class TenantUser(models.Model):
 
     def __str__(self):
         return f'{self.user.email} @ {self.tenant.name} ({self.role})'
+
+
+# ---------------------------------------------------------------------------
+# Notification Groups
+# ---------------------------------------------------------------------------
+
+SYSTEM_GROUP_ALL_USERS = 'All Users'
+SYSTEM_GROUP_ALL_ADMINS = 'All Admins'
+SYSTEM_GROUP_ALL_OPERATORS = 'All Operators'
+
+# Maps TenantUser role → the role-specific system group name (None = no role group)
+ROLE_TO_SYSTEM_GROUP = {
+    TenantUser.Role.ADMIN: SYSTEM_GROUP_ALL_ADMINS,
+    TenantUser.Role.OPERATOR: SYSTEM_GROUP_ALL_OPERATORS,
+    TenantUser.Role.VIEWER: None,
+}
+
+
+class NotificationGroup(models.Model):
+    """A named group of tenant users used as a notification target for rules.
+
+    System groups (All Users, All Admins, All Operators) are auto-maintained
+    via signals and cannot be renamed or deleted.
+    """
+
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name='notification_groups',
+    )
+    name = models.CharField(max_length=255)
+    is_system = models.BooleanField(
+        default=False,
+        help_text='System groups are auto-maintained and cannot be modified manually.',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('tenant', 'name')]
+        ordering = ['name']
+
+    def __str__(self):
+        return f'{self.name} ({self.tenant.name})'
+
+
+class NotificationGroupMember(models.Model):
+    """Links a TenantUser to a NotificationGroup."""
+
+    group = models.ForeignKey(
+        NotificationGroup,
+        on_delete=models.CASCADE,
+        related_name='members',
+    )
+    tenant_user = models.ForeignKey(
+        TenantUser,
+        on_delete=models.CASCADE,
+        related_name='notification_memberships',
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('group', 'tenant_user')]
+        ordering = ['added_at']
+
+    def __str__(self):
+        return f'{self.tenant_user.user.email} in {self.group.name}'

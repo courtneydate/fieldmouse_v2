@@ -19,15 +19,39 @@ User management (Tenant Admin / tenant-scoped):
     POST   /api/v1/users/invite/         — send invite email
     PUT    /api/v1/users/{id}/           — update user role
     DELETE /api/v1/users/{id}/           — remove user from tenant
+
+Tenant settings (tenant-scoped):
+    GET    /api/v1/settings/             — view tenant settings
+    PATCH  /api/v1/settings/             — update timezone (Tenant Admin only)
+
+Notification Groups (tenant-scoped):
+    GET    /api/v1/groups/               — list groups
+    POST   /api/v1/groups/               — create custom group
+    GET    /api/v1/groups/{id}/          — retrieve group with members
+    PUT    /api/v1/groups/{id}/          — rename group
+    DELETE /api/v1/groups/{id}/          — delete group
+    POST   /api/v1/groups/{id}/members/  — add member
+    DELETE /api/v1/groups/{id}/members/{tenant_user_id}/ — remove member
 """
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import AcceptInviteView, LoginView, LogoutView, MeView, RefreshView, TenantViewSet, UserViewSet
+from .views import (
+    AcceptInviteView,
+    LoginView,
+    LogoutView,
+    MeView,
+    NotificationGroupViewSet,
+    RefreshView,
+    TenantSettingsView,
+    TenantViewSet,
+    UserViewSet,
+)
 
 router = DefaultRouter()
 router.register('tenants', TenantViewSet, basename='tenant')
 router.register('users', UserViewSet, basename='user')
+router.register('groups', NotificationGroupViewSet, basename='group')
 
 app_name = 'accounts'
 
@@ -37,5 +61,6 @@ urlpatterns = [
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/me/', MeView.as_view(), name='me'),
     path('auth/accept-invite/', AcceptInviteView.as_view(), name='accept-invite'),
+    path('settings/', TenantSettingsView.as_view(), name='settings'),
     path('', include(router.urls)),
 ]

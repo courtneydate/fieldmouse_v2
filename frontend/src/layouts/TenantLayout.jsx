@@ -28,6 +28,24 @@ function TenantLayout() {
           >
             Users
           </NavLink>
+          <NavLink
+            to="/app/sites"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+            Sites
+          </NavLink>
+          <NavLink
+            to="/app/groups"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+            Groups
+          </NavLink>
+          <NavLink
+            to="/app/settings"
+            className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}
+          >
+            Settings
+          </NavLink>
         </nav>
         <div className={styles.headerRight}>
           {user && (

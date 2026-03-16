@@ -21,12 +21,16 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairView, TokenRefreshView
 
-from .models import Tenant, TenantUser
+from .models import NotificationGroup, NotificationGroupMember, Tenant, TenantUser
 from .permissions import IsFieldmouseAdmin, IsTenantAdmin, IsViewOnly
 from .serializers import (
     AcceptInviteSerializer,
+    AddMemberSerializer,
     InviteSerializer,
+    NotificationGroupMemberSerializer,
+    NotificationGroupSerializer,
     TenantSerializer,
+    TenantSettingsSerializer,
     TenantUserSerializer,
     UserRoleUpdateSerializer,
     UserSerializer,
@@ -284,3 +288,151 @@ class UserViewSet(viewsets.GenericViewSet):
 
         logger.info('Tenant invite sent to %s for %s (role: %s)', email, tenant.name, role)
         return Response({'detail': f'Invite sent to {email}.'}, status=status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Tenant settings (Tenant Admin / tenant-scoped)
+# ---------------------------------------------------------------------------
+
+class TenantSettingsView(APIView):
+    """GET/PATCH /api/v1/settings/ — view and update the current tenant's settings.
+
+    GET is available to all tenant users; PATCH requires Tenant Admin.
+    """
+
+    permission_classes = [IsAuthenticated, IsViewOnly]
+
+    def get(self, request):
+        """Return the current tenant's settings."""
+        serializer = TenantSettingsSerializer(request.user.tenantuser.tenant)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        """Update the current tenant's settings. Tenant Admin only."""
+        if not IsTenantAdmin().has_permission(request, self):
+            return Response(
+                {'error': {'code': 'permission_denied', 'message': 'Tenant Admin access required.'}},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        tenant = request.user.tenantuser.tenant
+        serializer = TenantSettingsSerializer(tenant, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+# ---------------------------------------------------------------------------
+# Notification Groups (Tenant Admin / tenant-scoped)
+# ---------------------------------------------------------------------------
+
+class NotificationGroupViewSet(viewsets.GenericViewSet):
+    """Tenant-scoped notification group management.
+
+    System groups (All Users, All Admins, All Operators) are read-only — they
+    cannot be renamed, deleted, or have members manually managed.
+    """
+
+    serializer_class = NotificationGroupSerializer
+
+    def get_permissions(self):
+        """Read actions available to all tenant users; writes require Tenant Admin."""
+        if self.action in ('create', 'update', 'destroy', 'add_member', 'remove_member'):
+            return [IsAuthenticated(), IsTenantAdmin()]
+        return [IsAuthenticated(), IsViewOnly()]
+
+    def get_queryset(self):
+        """Return NotificationGroups scoped to the requesting user's tenant."""
+        return NotificationGroup.objects.filter(
+            tenant=self.request.user.tenantuser.tenant
+        ).prefetch_related('members')
+
+    def list(self, request):
+        """GET /api/v1/groups/ — list all notification groups in the current tenant."""
+        serializer = NotificationGroupSerializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        """GET /api/v1/groups/:id/ — retrieve a group with its members."""
+        group = get_object_or_404(self.get_queryset(), pk=pk)
+        data = NotificationGroupSerializer(group).data
+        data['members'] = NotificationGroupMemberSerializer(
+            group.members.select_related('tenant_user__user'), many=True
+        ).data
+        return Response(data)
+
+    def create(self, request):
+        """POST /api/v1/groups/ — create a custom notification group. Tenant Admin only."""
+        serializer = NotificationGroupSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(tenant=request.user.tenantuser.tenant, is_system=False)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, pk=None):
+        """PUT /api/v1/groups/:id/ — rename a group. Tenant Admin only. System groups immutable."""
+        group = get_object_or_404(self.get_queryset(), pk=pk)
+        if group.is_system:
+            return Response(
+                {'error': {'code': 'system_group', 'message': 'System groups cannot be modified.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = NotificationGroupSerializer(group, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def destroy(self, request, pk=None):
+        """DELETE /api/v1/groups/:id/ — delete a group. Tenant Admin only. System groups immutable."""
+        group = get_object_or_404(self.get_queryset(), pk=pk)
+        if group.is_system:
+            return Response(
+                {'error': {'code': 'system_group', 'message': 'System groups cannot be deleted.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        group.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'], url_path='members')
+    def add_member(self, request, pk=None):
+        """POST /api/v1/groups/:id/members/ — add a member. Tenant Admin only. System groups immutable."""
+        group = get_object_or_404(self.get_queryset(), pk=pk)
+        if group.is_system:
+            return Response(
+                {'error': {'code': 'system_group', 'message': 'System group membership is managed automatically.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        serializer = AddMemberSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        tenant = request.user.tenantuser.tenant
+        tenant_user = get_object_or_404(
+            TenantUser, pk=serializer.validated_data['tenant_user_id'], tenant=tenant
+        )
+        _, created = NotificationGroupMember.objects.get_or_create(
+            group=group, tenant_user=tenant_user
+        )
+        if not created:
+            return Response(
+                {'error': {'code': 'already_member', 'message': 'User is already a member of this group.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'detail': 'Member added.'}, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=['delete'],
+        url_path=r'members/(?P<tenant_user_id>[^/.]+)',
+        url_name='remove-member',
+    )
+    def remove_member(self, request, pk=None, tenant_user_id=None):
+        """DELETE /api/v1/groups/:id/members/:tenant_user_id/ — remove a member. System groups immutable."""
+        group = get_object_or_404(self.get_queryset(), pk=pk)
+        if group.is_system:
+            return Response(
+                {'error': {'code': 'system_group', 'message': 'System group membership is managed automatically.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        membership = get_object_or_404(
+            NotificationGroupMember, group=group, tenant_user_id=tenant_user_id
+        )
+        membership.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

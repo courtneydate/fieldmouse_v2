@@ -9,7 +9,7 @@ from django.core import signing
 from django.utils.text import slugify
 from rest_framework import serializers
 
-from .models import Tenant, TenantUser, User
+from .models import NotificationGroup, NotificationGroupMember, Tenant, TenantUser, User
 
 logger = logging.getLogger(__name__)
 
@@ -146,3 +146,50 @@ class UserRoleUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TenantUser
         fields = ('role',)
+
+
+class TenantSettingsSerializer(serializers.ModelSerializer):
+    """Serializer for the tenant settings endpoint.
+
+    Exposes tenant metadata as read-only and allows Tenant Admin to update timezone.
+    """
+
+    class Meta:
+        model = Tenant
+        fields = ('id', 'name', 'slug', 'timezone', 'is_active', 'created_at')
+        read_only_fields = ('id', 'name', 'slug', 'is_active', 'created_at')
+
+
+class NotificationGroupMemberSerializer(serializers.ModelSerializer):
+    """Serializer for a group member — embeds basic user info."""
+
+    email = serializers.EmailField(source='tenant_user.user.email', read_only=True)
+    first_name = serializers.CharField(source='tenant_user.user.first_name', read_only=True)
+    last_name = serializers.CharField(source='tenant_user.user.last_name', read_only=True)
+    role = serializers.CharField(source='tenant_user.role', read_only=True)
+
+    class Meta:
+        model = NotificationGroupMember
+        fields = ('tenant_user_id', 'email', 'first_name', 'last_name', 'role', 'added_at')
+        read_only_fields = fields
+
+
+class NotificationGroupSerializer(serializers.ModelSerializer):
+    """Serializer for NotificationGroup list/detail."""
+
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = NotificationGroup
+        fields = ('id', 'name', 'is_system', 'member_count', 'created_at')
+        read_only_fields = ('id', 'is_system', 'created_at')
+
+    def get_member_count(self, obj):
+        """Return number of members in this group."""
+        return obj.members.count()
+
+
+class AddMemberSerializer(serializers.Serializer):
+    """Serializer for adding a member to a notification group."""
+
+    tenant_user_id = serializers.IntegerField()

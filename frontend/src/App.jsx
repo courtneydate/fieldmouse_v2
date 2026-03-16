@@ -13,6 +13,9 @@ import TenantList from './pages/admin/TenantList';
 import TenantCreate from './pages/admin/TenantCreate';
 import TenantDetail from './pages/admin/TenantDetail';
 import UserManagement from './pages/tenant/UserManagement';
+import Sites from './pages/tenant/Sites';
+import Groups from './pages/tenant/Groups';
+import Settings from './pages/tenant/Settings';
 
 function App() {
   const { user } = useAuth();
@@ -49,6 +52,9 @@ function App() {
       >
         <Route index element={<Navigate to="/app/users" replace />} />
         <Route path="users" element={<UserManagement />} />
+        <Route path="sites" element={<Sites />} />
+        <Route path="groups" element={<Groups />} />
+        <Route path="settings" element={<Settings />} />
       </Route>
 
       {/* Root redirect — FM Admins → /admin, tenant users → /app */}
