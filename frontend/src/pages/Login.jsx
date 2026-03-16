@@ -13,7 +13,8 @@ function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = location.state?.from?.pathname || '/';
+  const searchParams = new URLSearchParams(location.search);
+  const from = location.state?.from?.pathname || searchParams.get('next') || '/';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

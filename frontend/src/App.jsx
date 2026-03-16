@@ -39,9 +39,11 @@ function App() {
         path="/"
         element={
           <ProtectedRoute>
-            {user?.is_fieldmouse_admin
-              ? <Navigate to="/admin/tenants" replace />
-              : <div>Tenant dashboard — coming in Sprint 3</div>
+            {user === null
+              ? null /* wait for user to load; AuthContext will trigger a re-render */
+              : user.is_fieldmouse_admin
+                ? <Navigate to="/admin/tenants" replace />
+                : <div>Tenant dashboard — coming in Sprint 3</div>
             }
           </ProtectedRoute>
         }
