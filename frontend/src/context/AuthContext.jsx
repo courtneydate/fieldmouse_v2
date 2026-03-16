@@ -39,6 +39,20 @@ export function AuthProvider({ children }) {
     setUser(meResponse.data);
   }, []);
 
+  const acceptInvite = useCallback(async (token, firstName, lastName, password) => {
+    const response = await api.post('/api/v1/auth/accept-invite/', {
+      token,
+      first_name: firstName,
+      last_name: lastName,
+      password,
+    });
+    localStorage.setItem('access_token', response.data.access);
+    localStorage.setItem('refresh_token', response.data.refresh);
+    setIsAuthenticated(true);
+    const meResponse = await api.get('/api/v1/auth/me/');
+    setUser(meResponse.data);
+  }, []);
+
   const logout = useCallback(async () => {
     const refreshToken = localStorage.getItem('refresh_token');
     try {
@@ -56,7 +70,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, acceptInvite, logout }}>
       {children}
     </AuthContext.Provider>
   );

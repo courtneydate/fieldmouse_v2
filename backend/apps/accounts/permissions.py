@@ -1,14 +1,21 @@
 """Custom DRF permission classes for Fieldmouse.
 
-IsFieldmouseAdmin: grants access only to platform-level admin accounts.
-Additional permission classes (IsTenantAdmin, IsOperator, IsViewOnly)
-are added in Sprint 3.
+Hierarchy (least → most privileged):
+  IsViewOnly   — any authenticated tenant user (viewer, operator, or admin)
+  IsOperator   — tenant admin or operator
+  IsTenantAdmin — tenant admin only
+  IsFieldmouseAdmin — Fieldmouse platform admin only
 """
 import logging
 
 from rest_framework.permissions import BasePermission
 
 logger = logging.getLogger(__name__)
+
+
+def _get_tenant_user(request):
+    """Return the TenantUser for the request user, or None."""
+    return getattr(request.user, 'tenantuser', None)
 
 
 class IsFieldmouseAdmin(BasePermission):
@@ -27,3 +34,60 @@ class IsFieldmouseAdmin(BasePermission):
             and request.user.is_authenticated
             and request.user.is_fieldmouse_admin
         )
+
+
+class IsViewOnly(BasePermission):
+    """Any authenticated tenant user (viewer, operator, or admin).
+
+    This is the minimum permission required for tenant-scoped read endpoints.
+    Fieldmouse Admins (who have no TenantUser) are explicitly excluded.
+    """
+
+    message = 'Access restricted to tenant users.'
+
+    def has_permission(self, request, view):
+        """Return True if the user is authenticated and belongs to a tenant."""
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and _get_tenant_user(request) is not None
+        )
+
+
+class IsOperator(BasePermission):
+    """Authenticated tenant user with admin or operator role.
+
+    Used for write endpoints that operators are permitted to use
+    (dashboard management, sending commands, acknowledging alerts, CSV export).
+    """
+
+    message = 'Access restricted to Tenant Admins and Operators.'
+
+    def has_permission(self, request, view):
+        """Return True if the user is a tenant admin or operator."""
+        from .models import TenantUser  # local import avoids circular deps
+        if not (request.user and request.user.is_authenticated):
+            return False
+        tu = _get_tenant_user(request)
+        return tu is not None and tu.role in (
+            TenantUser.Role.ADMIN,
+            TenantUser.Role.OPERATOR,
+        )
+
+
+class IsTenantAdmin(BasePermission):
+    """Authenticated tenant user with admin role.
+
+    Used for endpoints restricted to Tenant Admins:
+    user management, device registration, rule management.
+    """
+
+    message = 'Access restricted to Tenant Admins.'
+
+    def has_permission(self, request, view):
+        """Return True if the user is a tenant admin."""
+        from .models import TenantUser  # local import avoids circular deps
+        if not (request.user and request.user.is_authenticated):
+            return False
+        tu = _get_tenant_user(request)
+        return tu is not None and tu.role == TenantUser.Role.ADMIN

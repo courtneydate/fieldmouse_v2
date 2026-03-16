@@ -1,10 +1,11 @@
 """URL patterns for the accounts app.
 
 Auth:
-    POST   /api/v1/auth/login/           — obtain JWT token pair
-    POST   /api/v1/auth/refresh/         — refresh access token
-    POST   /api/v1/auth/logout/          — blacklist refresh token
-    GET    /api/v1/auth/me/              — current user profile
+    POST   /api/v1/auth/login/            — obtain JWT token pair
+    POST   /api/v1/auth/refresh/          — refresh access token
+    POST   /api/v1/auth/logout/           — blacklist refresh token
+    GET    /api/v1/auth/me/               — current user profile
+    POST   /api/v1/auth/accept-invite/    — accept invite & create account
 
 Tenant management (Fieldmouse Admin only):
     GET    /api/v1/tenants/              — list tenants
@@ -12,14 +13,21 @@ Tenant management (Fieldmouse Admin only):
     GET    /api/v1/tenants/{id}/         — tenant detail
     PATCH  /api/v1/tenants/{id}/         — update tenant (incl. deactivate)
     POST   /api/v1/tenants/{id}/invite/  — send invite email
+
+User management (Tenant Admin / tenant-scoped):
+    GET    /api/v1/users/                — list users in tenant
+    POST   /api/v1/users/invite/         — send invite email
+    PUT    /api/v1/users/{id}/           — update user role
+    DELETE /api/v1/users/{id}/           — remove user from tenant
 """
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import LoginView, LogoutView, MeView, RefreshView, TenantViewSet
+from .views import AcceptInviteView, LoginView, LogoutView, MeView, RefreshView, TenantViewSet, UserViewSet
 
 router = DefaultRouter()
 router.register('tenants', TenantViewSet, basename='tenant')
+router.register('users', UserViewSet, basename='user')
 
 app_name = 'accounts'
 
@@ -28,5 +36,6 @@ urlpatterns = [
     path('auth/refresh/', RefreshView.as_view(), name='refresh'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/me/', MeView.as_view(), name='me'),
+    path('auth/accept-invite/', AcceptInviteView.as_view(), name='accept-invite'),
     path('', include(router.urls)),
 ]

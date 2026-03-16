@@ -1,9 +1,11 @@
 """Serializers for the accounts app.
 
-Covers User (read-only me endpoint), Tenant CRUD, and TenantUser.
+Covers User (read-only me endpoint), Tenant CRUD, TenantUser management,
+and the invite accept flow.
 """
 import logging
 
+from django.core import signing
 from django.utils.text import slugify
 from rest_framework import serializers
 
@@ -13,12 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 class UserSerializer(serializers.ModelSerializer):
-    """Read-only serializer for the current authenticated user."""
+    """Read-only serializer for the current authenticated user.
+
+    Includes tenant_role so the frontend knows what the user can do
+    without a separate API call.
+    """
+
+    tenant_role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'is_fieldmouse_admin')
+        fields = ('id', 'email', 'first_name', 'last_name', 'is_fieldmouse_admin', 'tenant_role')
         read_only_fields = fields
+
+    def get_tenant_role(self, obj):
+        """Return the user's role in their tenant, or None for FM Admins."""
+        tu = getattr(obj, 'tenantuser', None)
+        return tu.role if tu is not None else None
 
 
 class TenantSerializer(serializers.ModelSerializer):
@@ -49,7 +62,87 @@ class TenantSerializer(serializers.ModelSerializer):
 
 
 class InviteSerializer(serializers.Serializer):
-    """Serializer for the invite endpoint payload."""
+    """Serializer for invite endpoint payloads (FM Admin and Tenant Admin)."""
 
     email = serializers.EmailField()
     role = serializers.ChoiceField(choices=TenantUser.Role.choices, default=TenantUser.Role.ADMIN)
+
+
+class AcceptInviteSerializer(serializers.Serializer):
+    """Serializer for the accept-invite endpoint.
+
+    Validates the signed token and the new user's details, then creates
+    the User and TenantUser records atomically.
+    """
+
+    token = serializers.CharField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    password = serializers.CharField(min_length=8, write_only=True)
+
+    def validate_token(self, value):
+        """Decode and validate the signed invite token (max age: 7 days)."""
+        try:
+            data = signing.loads(value, salt='fieldmouse-invite', max_age=604800)
+        except signing.SignatureExpired:
+            raise serializers.ValidationError('Invite link has expired.')
+        except signing.BadSignature:
+            raise serializers.ValidationError('Invalid invite link.')
+
+        # Validate the referenced tenant still exists and is active
+        try:
+            tenant = Tenant.objects.get(pk=data['tenant_id'])
+        except Tenant.DoesNotExist:
+            raise serializers.ValidationError('The organisation no longer exists.')
+
+        if not tenant.is_active:
+            raise serializers.ValidationError('The organisation account has been deactivated.')
+
+        self._invite_data = data
+        return value
+
+    def validate(self, attrs):
+        """Ensure the invite email has not already been registered."""
+        invite_data = getattr(self, '_invite_data', {})
+        if 'email' in invite_data and User.objects.filter(email=invite_data['email']).exists():
+            raise serializers.ValidationError(
+                {'token': 'This invite has already been accepted.'}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        """Create the User and TenantUser from the validated invite data."""
+        data = self._invite_data
+        user = User.objects.create_user(
+            email=data['email'],
+            password=validated_data['password'],
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name'],
+        )
+        TenantUser.objects.create(
+            user=user,
+            tenant_id=data['tenant_id'],
+            role=data['role'],
+        )
+        return user
+
+
+class TenantUserSerializer(serializers.ModelSerializer):
+    """Serializer for listing and updating tenant users."""
+
+    email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+
+    class Meta:
+        model = TenantUser
+        fields = ('id', 'email', 'first_name', 'last_name', 'role', 'joined_at')
+        read_only_fields = ('id', 'email', 'first_name', 'last_name', 'joined_at')
+
+
+class UserRoleUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating a TenantUser's role."""
+
+    class Meta:
+        model = TenantUser
+        fields = ('role',)
