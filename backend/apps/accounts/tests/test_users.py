@@ -20,6 +20,7 @@ from apps.accounts.models import Tenant, TenantUser, User
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_tenant(name='Acme Corp'):
     """Create and return a Tenant."""
     from django.utils.text import slugify

@@ -11,6 +11,7 @@ from apps.devices.models import Device, DeviceType, Site
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def make_tenant(name='Acme'):
     return Tenant.objects.create(name=name, slug=slugify(name))
 
