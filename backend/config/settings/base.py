@@ -237,6 +237,7 @@ MQTT_BROKER_HOST = env('MQTT_BROKER_HOST', default='localhost')
 MQTT_BROKER_PORT = env.int('MQTT_BROKER_PORT', default=1883)
 MQTT_USERNAME = env('MQTT_USERNAME', default='')
 MQTT_PASSWORD = env('MQTT_PASSWORD', default='')
+MQTT_CLIENT_ID = env('MQTT_CLIENT_ID', default='fieldmouse-backend')
 
 # ---------------------------------------------------------------------------
 # Encryption (for DataSource credentials)

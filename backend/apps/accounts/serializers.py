@@ -6,6 +6,7 @@ and the invite accept flow.
 import logging
 
 from django.core import signing
+from django.db import transaction
 from django.utils.text import slugify
 from rest_framework import serializers
 
@@ -22,16 +23,22 @@ class UserSerializer(serializers.ModelSerializer):
     """
 
     tenant_role = serializers.SerializerMethodField()
+    tenant_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'is_fieldmouse_admin', 'tenant_role')
+        fields = ('id', 'email', 'first_name', 'last_name', 'is_fieldmouse_admin', 'tenant_role', 'tenant_name')
         read_only_fields = fields
 
     def get_tenant_role(self, obj):
         """Return the user's role in their tenant, or None for FM Admins."""
         tu = getattr(obj, 'tenantuser', None)
         return tu.role if tu is not None else None
+
+    def get_tenant_name(self, obj):
+        """Return the name of the user's tenant, or None for FM Admins."""
+        tu = getattr(obj, 'tenantuser', None)
+        return tu.tenant.name if tu is not None else None
 
 
 class TenantSerializer(serializers.ModelSerializer):
@@ -102,23 +109,40 @@ class AcceptInviteSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        """Ensure the invite email has not already been registered."""
+        """Ensure the invite email has not already been registered as an active account."""
         invite_data = getattr(self, '_invite_data', {})
-        if 'email' in invite_data and User.objects.filter(email=invite_data['email']).exists():
+        if 'email' in invite_data and User.objects.filter(
+            email=invite_data['email'], is_active=True,
+        ).exists():
             raise serializers.ValidationError(
                 {'token': 'This invite has already been accepted.'}
             )
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
-        """Create the User and TenantUser from the validated invite data."""
+        """Create (or reactivate) the User and TenantUser from the validated invite data.
+
+        If a previously deactivated user exists with the invite email, reactivate
+        them and update their details rather than creating a duplicate record.
+        """
         data = self._invite_data
-        user = User.objects.create_user(
-            email=data['email'],
-            password=validated_data['password'],
-            first_name=validated_data['first_name'],
-            last_name=validated_data['last_name'],
-        )
+        existing = User.objects.filter(email=data['email']).first()
+        if existing is not None:
+            # Reactivate a previously removed user
+            existing.set_password(validated_data['password'])
+            existing.first_name = validated_data['first_name']
+            existing.last_name = validated_data['last_name']
+            existing.is_active = True
+            existing.save(update_fields=['password', 'first_name', 'last_name', 'is_active'])
+            user = existing
+        else:
+            user = User.objects.create_user(
+                email=data['email'],
+                password=validated_data['password'],
+                first_name=validated_data['first_name'],
+                last_name=validated_data['last_name'],
+            )
         TenantUser.objects.create(
             user=user,
             tenant_id=data['tenant_id'],

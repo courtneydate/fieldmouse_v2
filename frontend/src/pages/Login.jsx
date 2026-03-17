@@ -30,7 +30,6 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
 
     const validationError = validate();
     if (validationError) {

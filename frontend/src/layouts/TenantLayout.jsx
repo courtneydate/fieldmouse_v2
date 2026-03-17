@@ -55,7 +55,12 @@ function TenantLayout() {
         </nav>
         <div className={styles.headerRight}>
           {user && (
-            <span className={styles.userEmail}>{user.email}</span>
+            <div className={styles.userInfo}>
+              {user.tenant_name && (
+                <span className={styles.tenantName}>{user.tenant_name}</span>
+              )}
+              <span className={styles.userEmail}>{user.email}</span>
+            </div>
           )}
           <button onClick={handleLogout} className={styles.logoutButton}>
             Sign out

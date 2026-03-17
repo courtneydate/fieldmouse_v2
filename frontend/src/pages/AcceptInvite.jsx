@@ -41,9 +41,11 @@ function AcceptInvite() {
       await acceptInvite(token, firstName, lastName, password);
       navigate('/', { replace: true });
     } catch (err) {
+      const errorData = err.response?.data?.error;
       const message =
-        err.response?.data?.error?.message ||
-        err.response?.data?.token?.[0] ||
+        errorData?.details?.token?.[0] ||
+        errorData?.details?.non_field_errors?.[0] ||
+        errorData?.message ||
         'Failed to accept invite. The link may have expired or already been used.';
       setError(message);
     } finally {

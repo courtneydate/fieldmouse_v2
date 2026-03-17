@@ -138,6 +138,24 @@ class TestAcceptInvite:
         })
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_reinvite_deactivated_user_succeeds(self):
+        """A previously removed (is_active=False) user can accept a new invite."""
+        tenant = make_tenant(name='Reactivate Corp')
+        # Simulate a user who was previously removed from the tenant
+        existing = make_user('returnee@example.com', is_active=False)
+        token = make_invite_token('returnee@example.com', tenant.id, 'operator')
+        client = APIClient()
+        resp = client.post(self.URL, {
+            'token': token,
+            'first_name': 'Re',
+            'last_name': 'Turned',
+            'password': 'newpassword99',
+        })
+        assert resp.status_code == status.HTTP_201_CREATED
+        existing.refresh_from_db()
+        assert existing.is_active is True
+        assert TenantUser.objects.filter(user=existing, tenant=tenant, role='operator').exists()
+
     def test_short_password_rejected(self):
         tenant = make_tenant()
         token = make_invite_token('pw@example.com', tenant.id, 'admin')
