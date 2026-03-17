@@ -134,9 +134,9 @@ fieldmouse/scout/{scout_serial}/{device_serial}/cmd/ack
 | Topic | Direction | Purpose |
 |-------|-----------|---------|
 | `.../telemetry` | Scout → Cloud | Scout's own telemetry — all stream values in one JSON payload |
-| `.../health` | Scout → Cloud | Scout's own health (battery, signal, uptime) |
+| `.../health` | Scout → Cloud | Scout's own health — **Phase 2 only** (MVP uses `_battery`/`_signal` in telemetry payload) |
 | `.../{device_serial}/telemetry` | Scout → Cloud | Telemetry from a connected device — all stream values in one JSON payload |
-| `.../{device_serial}/health` | Scout → Cloud | Health data for a connected device |
+| `.../{device_serial}/health` | Scout → Cloud | Health data for a connected device — **Phase 2 only** |
 | `.../cmd/{command_name}` | Cloud → Scout | Command sent directly to the Scout |
 | `.../{device_serial}/cmd/{command_name}` | Cloud → Scout | Command for a connected device — Scout routes it |
 | `.../{device_serial}/cmd/ack` | Scout → Cloud | Confirmation that a command was received and executed |
@@ -146,26 +146,21 @@ fieldmouse/scout/{scout_serial}/{device_serial}/cmd/ack
 
 **Telemetry payloads — stream values are sent as a JSON key-value object in a single message per device per interval:**
 
-v2 Scout own telemetry:
+v2 Scout own telemetry — includes `_battery` and `_signal` as reserved health keys alongside regular stream data:
 ```json
-{ "Relay_1": 0, "Relay_2": 1, "Relay_3": 0, "Relay_4": 0, "Analog_1": 3.2, "Analog_2": 0.0, "Analog_3": 1.5, "Analog_4": 0.8, "Digital_1": 1, "Digital_2": 0, "Digital_3": 0, "Digital_4": 1 }
+{ "Relay_1": 0, "Relay_2": 1, "Relay_3": 0, "Relay_4": 0, "Analog_1": 3.2, "Analog_2": 0.0, "Analog_3": 1.5, "Analog_4": 0.8, "Digital_1": 1, "Digital_2": 0, "Digital_3": 0, "Digital_4": 1, "_battery": 82, "_signal": -67 }
 ```
+
+`_battery` and `_signal` are reserved key names — they are extracted from the payload to update `DeviceHealth` and are also stored as virtual `StreamReading` records so they are available to the rule engine and dashboard charts. Mains-powered Scouts always send `_battery: 100`. Both keys are optional — if absent the corresponding health fields are not updated.
 
 v2 bridged device telemetry (any device type including MODBUS — Scout handles protocol translation, Fieldmouse sees JSON):
 ```json
 { "temperature": 23.4, "humidity": 60.1, "pressure": 1013.2 }
 ```
 
-Health payload:
-```json
-{
-  "is_online": true,
-  "battery": 82,
-  "signal": -67,
-  "activity_level": "normal",
-  "timestamp": "2026-03-05T10:30:00Z"
-}
-```
+**Health topic — Phase 2:** The `.../health` and `.../{device_serial}/health` topics are deferred to Phase 2. In MVP, battery and signal data are carried in the Scout's own telemetry payload using the `_battery` and `_signal` reserved keys. `last_seen_at` is updated on every received message of any type.
+
+**Legacy v1 health:** Legacy Scouts have no battery or signal data. `DeviceHealth.last_seen_at` is updated on every telemetry message received. `battery_level` and `signal_strength` remain null for legacy devices.
 
 **Dual-format topic support (legacy migration):**
 
@@ -398,13 +393,21 @@ The backend subscribes to both legacy and new topic formats simultaneously to su
 - [ ] Device list shows a health status indicator at a glance (colour-coded)
 - [ ] **Offline threshold:** Fieldmouse Admin sets a default offline threshold per device type (e.g. "mark offline if no data for 15 minutes"). Tenant Admin can override the threshold per device instance (e.g. a critical device may have a tighter threshold)
 - [ ] **Activity level** is derived by the platform from signal strength, battery level, and time since last message — not manually set. Enum: `normal / degraded / critical`. Derived rules:
-  - `normal` — signal and battery within acceptable range, recently heard from
-  - `degraded` — signal weak OR battery low OR approaching offline threshold
-  - `critical` — signal very weak OR battery very low OR just came back online after being offline
-- [ ] Health metrics (battery level, signal strength) are both **displayable on dashboards** and **usable as rule conditions** in the rule builder
+  - `normal` — signal > -70 dBm (or null) AND battery > 40% (or null) AND recently heard from
+  - `degraded` — signal -70 to -85 dBm OR battery 20–40% OR time since last message > 75% of offline threshold
+  - `critical` — signal < -85 dBm OR battery < 20% OR just came back online after being offline
+- [ ] **Activity level thresholds are configurable per tenant** via TenantSettings. Platform defaults apply if not overridden:
+  - `signal_degraded_threshold`: -70 dBm (default)
+  - `signal_critical_threshold`: -85 dBm (default)
+  - `battery_degraded_threshold`: 40% (default)
+  - `battery_critical_threshold`: 20% (default)
+  - `offline_approaching_percent`: 75% of offline threshold triggers degraded (default)
+- [ ] **Legacy v1 devices** have no battery or signal data — activity level derived from time since last message only. `battery_level` and `signal_strength` remain null.
+- [ ] **Battery and signal stored as virtual streams** — `_battery` and `_signal` reserved keys in v2 Scout telemetry are stored as `StreamReading` records alongside regular telemetry. This makes them available to the rule engine and dashboard charts without special handling. Mains-powered Scouts always send `_battery: 100`.
+- [ ] Health metrics (battery level, signal strength) are both **displayable on dashboards** and **usable as rule conditions** in the rule builder via virtual streams
 - [ ] Health metrics can be added to dashboards as widgets (e.g. uptime chart, battery gauge)
 - [ ] All users including View-Only can see device health
-- [ ] ⚑ **Implementation note:** battery and signal need to be accessible to the rule engine. Decision required: treat them as virtual streams (stored as StreamReadings alongside telemetry) or as a special health condition type in the rule builder. Virtual streams is architecturally cleaner but duplicates storage.
+- [ ] `last_seen_at` is updated on every received message of any type (telemetry, any future message types) for both v2 and legacy v1 devices
 
 ---
 
@@ -418,8 +421,9 @@ The backend subscribes to both legacy and new topic formats simultaneously to su
 - [ ] Unknown stream keys on a known device automatically create new Stream records
 - [ ] Messages from unregistered or unapproved devices are logged and discarded
 - [ ] Ingestion latency from MQTT receipt to stored reading is under 5 seconds
-- [ ] Device health record is updated on every received message
-- [ ] Scout health topic updates the Scout device's own health record
+- [ ] `DeviceHealth.last_seen_at` is updated on every received message for both v2 and legacy v1 devices
+- [ ] `_battery` and `_signal` reserved keys in v2 Scout telemetry update `DeviceHealth` and are stored as virtual StreamReadings
+- [ ] Scout health topic (`fieldmouse/scout/{serial}/health`) — Phase 2 only, not implemented in MVP
 
 ---
 
@@ -687,7 +691,7 @@ The backend subscribes to both legacy and new topic formats simultaneously to su
 | Entity | Relationships | Key Fields |
 |--------|--------------|------------|
 | User | base auth | id, email, password, is_fieldmouse_admin, created_at |
-| Tenant | has many Sites, TenantUsers | id, name, slug, timezone (IANA tz string, e.g. "Australia/Brisbane"), is_active, created_at |
+| Tenant | has many Sites, TenantUsers | id, name, slug, timezone (IANA tz string, e.g. "Australia/Brisbane"), is_active, signal_degraded_threshold (int dBm, default -70), signal_critical_threshold (int dBm, default -85), battery_degraded_threshold (int %, default 40), battery_critical_threshold (int %, default 20), offline_approaching_percent (int %, default 75), created_at |
 | TenantUser | links User ↔ Tenant | id, user_id, tenant_id, role (admin/operator/viewer), joined_at |
 | Site | belongs to Tenant | id, tenant_id, name, description, latitude, longitude, created_at |
 | DeviceType | platform library | id, name, slug, description, connection_type, is_push, default_offline_threshold_minutes (int), command_ack_timeout_seconds (int), commands (JSONB array — each entry: name, label, description, params array), is_active, created_at |
@@ -1109,6 +1113,8 @@ Fieldmouse is designed to run on any Linux server. All external service dependen
 - [ ] **SMS provider** — which provider is preferred? (Twilio preferred — works on any deployment. AWS SNS as alternative for AWS-only deployments.)
 - [x] **MQTT broker** — resolved: Mosquitto for local dev and self-hosted production deployments. AWS IoT Core supported as an alternative for AWS production deployments. Both use the same ingestion code path — broker connection configured entirely via env vars (`MQTT_BROKER_HOST`, `MQTT_BROKER_PORT`, `MQTT_USERNAME`, `MQTT_PASSWORD`).
 - [x] **Legacy telemetry payload format (Scout/telemetry)** — resolved: 12-value CSV string, fixed field order (4 relays, 4 analog inputs, 4 digital inputs). Stream keys match v2 Scout JSON keys. See MQTT Topic Structure section for full mapping.
+- [x] **Battery and signal as virtual streams** — resolved: `_battery` and `_signal` are reserved keys in v2 Scout telemetry. Stored as StreamReadings (virtual streams) AND update DeviceHealth. Makes them available to rule engine and dashboard without special handling. Legacy v1 devices have null battery/signal.
+- [x] **Activity level thresholds** — resolved: configurable per tenant via Tenant model fields with platform defaults (signal: -70/-85 dBm, battery: 40%/20%, offline approaching: 75%). See Feature: Device Health Monitoring for full derivation rules.
 - [ ] ⚑ **Legacy weatherstation/tbox/abb payload format** — payload structure for these three legacy message types still required before their parsers can be built. Hardware team input needed.
 - [ ] ⚑ **Legacy command format** — current command format sent to Scouts is inconsistent (strings, JSON, raw characters). Clarify with hardware team and define migration path before legacy command handling can be specced.
 - [ ] **Scout firmware rollout plan** — ~500 Scouts across ~30 customers need firmware updates to move from `legacy_v1` to `fieldmouse_v2` topic format. Dual-format support handles the transition period. Coordinate update timeline and rollout order with hardware team.
