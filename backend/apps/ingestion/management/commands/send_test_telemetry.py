@@ -151,11 +151,6 @@ class Command(BaseCommand):
                 except DeviceHealth.DoesNotExist:
                     activity, online, battery, signal = 'no data', '—', '—', '—'
 
-                activity_styled = (
-                    self.style.SUCCESS(activity) if activity == 'normal'
-                    else self.style.WARNING(activity) if activity == 'degraded'
-                    else self.style.ERROR(activity)
-                )
                 self.stdout.write(
                     f'   {round_num + 1:<6} {elapsed:>7.1f}s   '
                     f'{activity:<12} {online:<8} {battery:>8} {signal:>8}'

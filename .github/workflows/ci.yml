@@ -54,7 +54,7 @@ jobs:
       DATABASE_URL: postgres://fieldmouse:fieldmouse@localhost:5432/fieldmouse_test
       REDIS_URL: redis://localhost:6379/0
       JWT_SECRET_KEY: ci-test-jwt-secret
-      ENCRYPTION_KEY: ci-test-encryption-key-placeholder
+      FIELD_ENCRYPTION_KEY: pUGVWTlYu9EqyIaT7EjM4zUdA38mdLNPlpbu60uNKZU=
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
