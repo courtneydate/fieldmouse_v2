@@ -255,8 +255,6 @@ MQTT_CLIENT_ID = env('MQTT_CLIENT_ID', default='fieldmouse-backend')
 # Encryption (for DataSource credentials)
 # ---------------------------------------------------------------------------
 
-ENCRYPTION_KEY = env('ENCRYPTION_KEY')
-
 # Fernet key read by django-encrypted-model-fields for DataSource.credentials
 # and DataSource.auth_token_cache. Must be a valid 32-byte Fernet key.
 FIELD_ENCRYPTION_KEY = env('FIELD_ENCRYPTION_KEY')
