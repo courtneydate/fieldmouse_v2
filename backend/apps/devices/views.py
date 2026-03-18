@@ -238,6 +238,20 @@ class DeviceViewSet(viewsets.GenericViewSet):
         logger.info('Device "%s" (id=%s) rejected by %s', device.name, device.pk, request.user.email)
         return Response(DeviceSerializer(device).data)
 
+    @action(detail=True, methods=['get'], url_path='streams')
+    def streams(self, request, pk=None):
+        """GET /api/v1/devices/:id/streams/ — list all streams for a device.
+
+        Accessible to all authenticated users (View-Only and above).
+        Each stream includes its latest reading value and timestamp.
+        """
+        from apps.readings.serializers import StreamSerializer
+        from apps.readings.views import _annotate_latest
+
+        device = get_object_or_404(self.get_queryset(), pk=pk)
+        qs = _annotate_latest(device.streams.all())
+        return Response(StreamSerializer(qs, many=True).data)
+
     @action(detail=True, methods=['get'], url_path='health')
     def health(self, request, pk=None):
         """GET /api/v1/devices/:id/health/ — return the health record for a device.
