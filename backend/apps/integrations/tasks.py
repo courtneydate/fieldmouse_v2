@@ -24,6 +24,11 @@ POLL_FAILURE_THRESHOLD = 5
 # HTTP timeout for provider API calls (seconds)
 REQUEST_TIMEOUT = 15
 
+# How many times to re-authenticate and retry after a 401 from the provider.
+# Handles server-side token revocation where the cached token looks valid but
+# has been invalidated before its stated expiry.
+MAX_AUTH_RETRIES = 3
+
 
 @shared_task(name='integrations.poll_datasource_devices')
 def poll_datasource_devices() -> None:
@@ -93,39 +98,70 @@ def poll_single_device(datasource_device_id: int) -> None:
     credentials = dsd.datasource.credentials or {}
     token_cache = dsd.datasource.auth_token_cache or {}
 
-    # --- Authenticate ---
-    try:
-        headers, params, updated_cache = get_auth_session(provider, credentials, token_cache)
-    except AuthError as exc:
-        logger.error(
-            'Auth failure polling DataSourceDevice %d (ds=%d): %s',
-            dsd.pk, dsd.datasource_id, exc,
-        )
-        _record_failure(dsd, DataSourceDevice.PollStatus.AUTH_FAILURE, str(exc), now)
-        return
-
-    # Persist refreshed token
-    if updated_cache is not None:
-        dsd.datasource.auth_token_cache = updated_cache
-        dsd.datasource.save(update_fields=['auth_token_cache'])
-
-    # --- Build request URL ---
+    # --- Build request URL (static across retries) ---
     detail_cfg = provider.detail_endpoint
     path_template = detail_cfg.get('path_template', detail_cfg.get('path', ''))
     path = path_template.replace('{device_id}', str(dsd.external_device_id))
     method = detail_cfg.get('method', 'GET').upper()
     url = provider.base_url.rstrip('/') + '/' + path.lstrip('/')
 
-    # --- Call provider ---
-    try:
-        resp = http_requests.request(
-            method, url, headers=headers, params=params, timeout=REQUEST_TIMEOUT,
+    # --- Authenticate and call provider, retrying up to MAX_AUTH_RETRIES times on 401.
+    # A 401 from the device endpoint means the token was revoked server-side before its
+    # stated expiry. Clear the cache and re-authenticate before each retry. ---
+    data = None
+    for attempt in range(MAX_AUTH_RETRIES):
+        try:
+            headers, params, updated_cache = get_auth_session(provider, credentials, token_cache)
+        except AuthError as exc:
+            logger.error(
+                'Auth failure polling DataSourceDevice %d (ds=%d): %s',
+                dsd.pk, dsd.datasource_id, exc,
+            )
+            _record_failure(dsd, DataSourceDevice.PollStatus.AUTH_FAILURE, str(exc), now)
+            return
+
+        if updated_cache is not None:
+            dsd.datasource.auth_token_cache = updated_cache
+            token_cache = updated_cache
+            dsd.datasource.save(update_fields=['auth_token_cache'])
+
+        try:
+            resp = http_requests.request(
+                method, url, headers=headers, params=params, timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            break  # success — exit retry loop
+        except http_requests.HTTPError as exc:
+            if resp.status_code == 401:
+                logger.warning(
+                    'DataSourceDevice %d: 401 on attempt %d/%d — clearing token cache and retrying',
+                    dsd.pk, attempt + 1, MAX_AUTH_RETRIES,
+                )
+                token_cache = {}
+                dsd.datasource.auth_token_cache = {}
+                dsd.datasource.save(update_fields=['auth_token_cache'])
+                # continue to next attempt
+            else:
+                logger.error('Poll request failed for DataSourceDevice %d: %s', dsd.pk, exc)
+                _record_failure(dsd, DataSourceDevice.PollStatus.ERROR, str(exc), now)
+                return
+        except http_requests.RequestException as exc:
+            logger.error('Poll request failed for DataSourceDevice %d: %s', dsd.pk, exc)
+            _record_failure(dsd, DataSourceDevice.PollStatus.ERROR, str(exc), now)
+            return
+    else:
+        # All MAX_AUTH_RETRIES attempts returned 401
+        logger.error(
+            'DataSourceDevice %d: 401 Unauthorized after %d auth retries',
+            dsd.pk, MAX_AUTH_RETRIES,
         )
-        resp.raise_for_status()
-        data = resp.json()
-    except http_requests.RequestException as exc:
-        logger.error('Poll request failed for DataSourceDevice %d: %s', dsd.pk, exc)
-        _record_failure(dsd, DataSourceDevice.PollStatus.ERROR, str(exc), now)
+        _record_failure(
+            dsd,
+            DataSourceDevice.PollStatus.AUTH_FAILURE,
+            f'401 Unauthorized after {MAX_AUTH_RETRIES} auth retries',
+            now,
+        )
         return
 
     # --- Extract values and build StreamReadings ---
