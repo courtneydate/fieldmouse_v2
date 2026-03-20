@@ -47,3 +47,24 @@
   align-items: center;
   flex: 1;
 }
+
+/* Drag-and-drop */
+.widgetWrapper {
+  cursor: grab;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.widgetWrapper:active {
+  cursor: grabbing;
+}
+
+.dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+
+.dragOver {
+  outline: 2px dashed #1A6B4A;
+  outline-offset: 3px;
+  border-radius: 8px;
+}

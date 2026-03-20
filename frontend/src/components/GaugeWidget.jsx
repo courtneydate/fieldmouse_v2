@@ -25,10 +25,11 @@ function bandColor(value, warningThreshold, dangerThreshold) {
  * @param {object}   props
  * @param {object}   props.config          - Widget JSONB config.
  * @param {number}   props.refetchInterval - Poll interval in ms.
- * @param {boolean}  props.canEdit         - Show remove button when true.
+ * @param {boolean}  props.canEdit         - Show action buttons when true.
  * @param {function} props.onRemove        - Called when remove is clicked.
+ * @param {function} [props.onEdit]        - Called when edit is clicked.
  */
-function GaugeWidget({ config = {}, refetchInterval, canEdit, onRemove }) {
+function GaugeWidget({ config = {}, refetchInterval, canEdit, onRemove, onEdit }) {
   const {
     stream_id: streamId,
     min = 0,
@@ -103,9 +104,10 @@ function GaugeWidget({ config = {}, refetchInterval, canEdit, onRemove }) {
   return (
     <div className={styles.card}>
       {canEdit && (
-        <button className={styles.removeBtn} onClick={onRemove} title="Remove widget">
-          ×
-        </button>
+        <div className={styles.widgetActions}>
+          {onEdit && <button className={styles.editBtn} onClick={onEdit} title="Edit widget">✎</button>}
+          <button className={styles.removeBtn} onClick={onRemove} title="Remove widget">×</button>
+        </div>
       )}
       <p className={styles.label}>{label}</p>
 

@@ -38,9 +38,10 @@ const TREND_CLASS = { up: styles.trendUp, down: styles.trendDown, stable: styles
  * @param {object}   [props.config]       - Widget config (optional label override).
  * @param {number}   [props.refetchInterval] - Poll interval in ms (default: 30 000).
  * @param {function} [props.onRemove]     - Called when the remove button is clicked.
- * @param {boolean}  [props.canEdit]      - Show remove button when true.
+ * @param {function} [props.onEdit]       - Called when the edit button is clicked.
+ * @param {boolean}  [props.canEdit]      - Show action buttons when true.
  */
-function ValueCard({ streamId, config = {}, refetchInterval = 30000, onRemove, canEdit }) {
+function ValueCard({ streamId, config = {}, refetchInterval = 30000, onRemove, onEdit, canEdit }) {
   const { data: stream } = useQuery({
     queryKey: ['stream', streamId],
     queryFn: () => api.get(`/api/v1/streams/${streamId}/`).then((r) => r.data),
@@ -66,10 +67,15 @@ function ValueCard({ streamId, config = {}, refetchInterval = 30000, onRemove, c
 
   return (
     <div className={styles.card}>
-      {canEdit && onRemove && (
-        <button className={styles.removeBtn} onClick={onRemove} title="Remove widget">
-          ×
-        </button>
+      {canEdit && (
+        <div className={styles.widgetActions}>
+          {onEdit && (
+            <button className={styles.editBtn} onClick={onEdit} title="Edit widget">✎</button>
+          )}
+          {onRemove && (
+            <button className={styles.removeBtn} onClick={onRemove} title="Remove widget">×</button>
+          )}
+        </div>
       )}
       <div className={styles.label}>{label}</div>
       <div className={styles.valueRow}>

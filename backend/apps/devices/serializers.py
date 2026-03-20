@@ -33,6 +33,7 @@ class DeviceTypeSerializer(serializers.ModelSerializer):
             'command_ack_timeout_seconds',
             'commands',
             'stream_type_definitions',
+            'status_indicator_mappings',
             'is_active',
             'created_at',
         )

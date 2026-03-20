@@ -88,6 +88,15 @@ class DeviceType(models.Model):
             '{key, label, data_type, unit}'
         ),
     )
+    status_indicator_mappings = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Per-stream status indicator mappings for the Status Indicator dashboard widget. '
+            'Keyed by stream key; each value is a list of {value, color, label} entries. '
+            'Example: {"motor_status": [{"value": "running", "color": "#22C55E", "label": "Running"}]}'
+        ),
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

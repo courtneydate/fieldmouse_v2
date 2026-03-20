@@ -119,15 +119,35 @@ describe('WidgetBuilderModal', () => {
     });
   });
 
-  it('status_indicator option is disabled', () => {
+  it('status_indicator option is enabled', () => {
     renderWithQuery(<WidgetBuilderModal {...defaultProps} />);
     const option = screen.getByRole('option', { name: /status indicator/i });
-    expect(option).toBeDisabled();
+    expect(option).not.toBeDisabled();
   });
 
-  it('health_uptime_chart option is disabled', () => {
+  it('selecting status_indicator shows site and device pickers', () => {
+    renderWithQuery(<WidgetBuilderModal {...defaultProps} />);
+    fireEvent.change(screen.getByRole('combobox', { name: /widget type/i }), {
+      target: { value: 'status_indicator' },
+    });
+    // Site filter and device picker should appear
+    expect(screen.getByRole('option', { name: /all sites/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /select a device/i })).toBeInTheDocument();
+  });
+
+  it('health_uptime_chart option is enabled', () => {
     renderWithQuery(<WidgetBuilderModal {...defaultProps} />);
     const option = screen.getByRole('option', { name: /health.*uptime/i });
-    expect(option).toBeDisabled();
+    expect(option).not.toBeDisabled();
+  });
+
+  it('selecting health_uptime_chart shows chart type options', () => {
+    renderWithQuery(<WidgetBuilderModal {...defaultProps} />);
+    fireEvent.change(screen.getByRole('combobox', { name: /widget type/i }), {
+      target: { value: 'health_uptime_chart' },
+    });
+    expect(screen.getByRole('option', { name: /online.*offline/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /battery/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /signal/i })).toBeInTheDocument();
   });
 });

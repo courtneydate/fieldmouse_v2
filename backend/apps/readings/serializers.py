@@ -23,15 +23,19 @@ class StreamSerializer(serializers.ModelSerializer):
     All other fields are read-only.
     `latest_value` and `latest_timestamp` are populated from annotations
     set by the view queryset (efficient) or fall back to a direct DB query.
+    `device` exposes the parent device PK so the frontend can resolve
+    device context (e.g. for widget builder edit-mode pre-population).
     """
 
     latest_value = serializers.SerializerMethodField()
     latest_timestamp = serializers.SerializerMethodField()
+    device = serializers.IntegerField(source='device_id', read_only=True)
 
     class Meta:
         model = Stream
         fields = (
             'id',
+            'device',
             'key',
             'label',
             'unit',
@@ -41,7 +45,7 @@ class StreamSerializer(serializers.ModelSerializer):
             'latest_timestamp',
             'created_at',
         )
-        read_only_fields = ('id', 'key', 'data_type', 'latest_value', 'latest_timestamp', 'created_at')
+        read_only_fields = ('id', 'device', 'key', 'data_type', 'latest_value', 'latest_timestamp', 'created_at')
 
     def get_latest_value(self, obj):
         """Return the most recent reading value, or None if no readings exist."""

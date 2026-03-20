@@ -252,6 +252,89 @@ class DeviceViewSet(viewsets.GenericViewSet):
         qs = _annotate_latest(device.streams.all())
         return Response(StreamSerializer(qs, many=True).data)
 
+    @action(detail=True, methods=['get'], url_path='health-history')
+    def health_history(self, request, pk=None):
+        """GET /api/v1/devices/:id/health-history/ — synthetic online/offline timeline.
+
+        Derives presence from StreamReading timestamps: for each time bucket, if any
+        reading was received the device is considered online; otherwise offline.
+
+        Query params:
+            time_range  '1h' | '24h' | '7d' | '30d' (default: '24h')
+            from        ISO 8601 datetime override for range start
+            to          ISO 8601 datetime override for range end
+
+        Returns:
+            { timeline: [{timestamp, is_online}], bucket_minutes: int }
+
+        Ref: SPEC.md § Feature: Dashboards & Visualisation — Health/Uptime Chart widget
+        """
+        from datetime import timedelta
+
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
+
+        from apps.readings.models import StreamReading
+
+        device = get_object_or_404(self.get_queryset(), pk=pk)
+
+        range_map = {
+            '1h': timedelta(hours=1),
+            '24h': timedelta(hours=24),
+            '7d': timedelta(days=7),
+            '30d': timedelta(days=30),
+        }
+        time_range = request.query_params.get('time_range', '24h')
+        now = timezone.now()
+        start = now - range_map.get(time_range, timedelta(hours=24))
+
+        from_param = request.query_params.get('from')
+        to_param = request.query_params.get('to')
+        if from_param:
+            parsed = parse_datetime(from_param)
+            if parsed:
+                start = parsed
+        if to_param:
+            parsed = parse_datetime(to_param)
+            if parsed:
+                now = parsed
+
+        total_seconds = (now - start).total_seconds()
+        if total_seconds <= 3600:
+            bucket_minutes = 5
+        elif total_seconds <= 86400:
+            bucket_minutes = 30
+        elif total_seconds <= 7 * 86400:
+            bucket_minutes = 120
+        else:
+            bucket_minutes = 360
+
+        reading_times = StreamReading.objects.filter(
+            stream__device=device,
+            timestamp__gte=start,
+            timestamp__lte=now,
+        ).values_list('timestamp', flat=True)
+
+        active_buckets: set = set()
+        for ts in reading_times:
+            epoch_minutes = int(ts.timestamp() / 60)
+            bucket_key = (epoch_minutes // bucket_minutes) * bucket_minutes
+            active_buckets.add(bucket_key)
+
+        timeline = []
+        current = start
+        bucket_delta = timedelta(minutes=bucket_minutes)
+        while current <= now:
+            epoch_minutes = int(current.timestamp() / 60)
+            bucket_key = (epoch_minutes // bucket_minutes) * bucket_minutes
+            timeline.append({
+                'timestamp': current.isoformat(),
+                'is_online': bucket_key in active_buckets,
+            })
+            current += bucket_delta
+
+        return Response({'timeline': timeline, 'bucket_minutes': bucket_minutes})
+
     @action(detail=True, methods=['get'], url_path='health')
     def health(self, request, pk=None):
         """GET /api/v1/devices/:id/health/ — return the health record for a device.

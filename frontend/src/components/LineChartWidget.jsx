@@ -41,10 +41,11 @@ function buildParams(preset, dateFrom, dateTo) {
  * @param {object}   props
  * @param {object}   props.config          - Widget JSONB config: { streams, time_range, date_from, date_to }.
  * @param {number}   props.refetchInterval - Poll interval in ms.
- * @param {boolean}  props.canEdit         - Show remove button when true.
+ * @param {boolean}  props.canEdit         - Show action buttons when true.
  * @param {function} props.onRemove        - Called when remove is clicked.
+ * @param {function} [props.onEdit]        - Called when edit is clicked.
  */
-function LineChartWidget({ config = {}, refetchInterval, canEdit, onRemove }) {
+function LineChartWidget({ config = {}, refetchInterval, canEdit, onRemove, onEdit }) {
   const streamConfigs = useMemo(() => config.streams || [], [config.streams]);
 
   const [preset, setPreset] = useState(config.time_range || '24h');
@@ -126,9 +127,10 @@ function LineChartWidget({ config = {}, refetchInterval, canEdit, onRemove }) {
   return (
     <div className={styles.card}>
       {canEdit && (
-        <button className={styles.removeBtn} onClick={onRemove} title="Remove widget">
-          ×
-        </button>
+        <div className={styles.widgetActions}>
+          {onEdit && <button className={styles.editBtn} onClick={onEdit} title="Edit widget">✎</button>}
+          <button className={styles.removeBtn} onClick={onRemove} title="Remove widget">×</button>
+        </div>
       )}
       <div className={styles.header}>
         <TimeRangeSelector

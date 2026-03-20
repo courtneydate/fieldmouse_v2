@@ -55,18 +55,29 @@
   margin-top: 0.25rem;
 }
 
-.removeBtn {
+.widgetActions {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
+  display: flex;
+  gap: 0.125rem;
+}
+
+.editBtn,
+.removeBtn {
   background: none;
   border: none;
-  font-size: 1.25rem;
+  font-size: 1rem;
   line-height: 1;
   color: #9CA3AF;
   cursor: pointer;
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
+}
+
+.editBtn:hover {
+  background: #EFF6FF;
+  color: #3B82F6;
 }
 
 .removeBtn:hover {

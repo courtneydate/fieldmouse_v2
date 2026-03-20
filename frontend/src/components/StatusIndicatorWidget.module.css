@@ -3,20 +3,21 @@
   background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 8px;
-  padding: 1.25rem 1.25rem 0.75rem;
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 0.75rem;
-  min-width: 0; /* prevent grid blowout */
+  min-height: 120px;
+  justify-content: center;
 }
 
-.widgetActions {
+.actions {
   position: absolute;
-  top: 0.625rem;
-  right: 0.625rem;
+  top: 0.5rem;
+  right: 0.5rem;
   display: flex;
   gap: 0.125rem;
-  z-index: 1;
 }
 
 .editBtn,
@@ -37,29 +38,42 @@
 }
 
 .removeBtn:hover {
-  background: #FEE2E2;
+  background: #FEF2F2;
   color: #EF4444;
 }
 
-.header {
-  /* TimeRangeSelector sits here */
+.streamLabel {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  align-self: flex-start;
 }
 
-.chartArea {
-  min-height: 280px;
+.indicator {
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 6px;
+  padding: 0.625rem 1.5rem;
+  min-width: 120px;
 }
 
-/* Stretch ApexCharts to fill the card width */
-.chartArea > div {
-  width: 100%;
+.indicatorLabel {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  letter-spacing: 0.04em;
+}
+
+.unmapped {
+  font-size: 0.75rem;
+  color: #9CA3AF;
 }
 
 .statusMsg {
   font-size: 0.875rem;
-  color: #6B7280;
-  margin: 0;
+  color: #9CA3AF;
   text-align: center;
 }

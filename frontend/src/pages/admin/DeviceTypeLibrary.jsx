@@ -366,6 +366,160 @@ CommandsEditor.propTypes = {
 };
 
 // ---------------------------------------------------------------------------
+// Status indicator mappings editor
+// Manages the status_indicator_mappings JSONB field.
+// Structure: { [streamKey]: [{value, color, label}, ...], ... }
+// ---------------------------------------------------------------------------
+
+function StatusIndicatorMappingsEditor({ value, onChange, streamTypeDefinitions, disabled }) {
+  /**
+   * Editor for status_indicator_mappings.
+   * Displays one section per stream key.
+   * Users can add/remove stream keys and configure {value, color, label} entries per key.
+   */
+  const [newKey, setNewKey] = useState('');
+
+  const streamKeys = Object.keys(value);
+
+  const handleAddKey = () => {
+    const key = newKey.trim();
+    if (!key || value[key] !== undefined) return;
+    onChange({ ...value, [key]: [] });
+    setNewKey('');
+  };
+
+  const handleRemoveKey = (key) => {
+    const next = { ...value };
+    delete next[key];
+    onChange(next);
+  };
+
+  const handleEntryChange = (key, index, field, fieldValue) => {
+    const updated = value[key].map((e, i) =>
+      i === index ? { ...e, [field]: fieldValue } : e
+    );
+    onChange({ ...value, [key]: updated });
+  };
+
+  const handleAddEntry = (key) => {
+    onChange({ ...value, [key]: [...value[key], { value: '', color: '#22C55E', label: '' }] });
+  };
+
+  const handleRemoveEntry = (key, index) => {
+    onChange({ ...value, [key]: value[key].filter((_, i) => i !== index) });
+  };
+
+  // Build suggestion list from stream_type_definitions keys
+  const suggestedKeys = (streamTypeDefinitions || []).map((s) => s.key).filter(Boolean);
+
+  return (
+    <div>
+      {streamKeys.map((key) => (
+        <div
+          key={key}
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 4,
+            padding: '0.75rem',
+            marginBottom: '0.5rem',
+          }}
+        >
+          <div className={styles.inlineFields} style={{ alignItems: 'center', marginBottom: '0.5rem' }}>
+            <strong style={{ fontSize: '0.875rem', fontFamily: 'monospace' }}>{key}</strong>
+            <button
+              type="button"
+              className={styles.dangerButton}
+              onClick={() => handleRemoveKey(key)}
+              disabled={disabled}
+              style={{ marginLeft: 'auto' }}
+            >
+              Remove key
+            </button>
+          </div>
+          {value[key].map((entry, i) => (
+            <div key={i} className={styles.inlineFields} style={{ marginBottom: '0.375rem', alignItems: 'center' }}>
+              <input
+                type="text"
+                placeholder="value (e.g. running)"
+                value={entry.value}
+                onChange={(e) => handleEntryChange(key, i, 'value', e.target.value)}
+                className={styles.input}
+                disabled={disabled}
+              />
+              <input
+                type="color"
+                value={entry.color || '#22C55E'}
+                onChange={(e) => handleEntryChange(key, i, 'color', e.target.value)}
+                disabled={disabled}
+                style={{ width: '3rem', height: '2rem', padding: 0, border: '1px solid #D1D5DB', borderRadius: 4, cursor: 'pointer' }}
+                title="Pick badge colour"
+              />
+              <input
+                type="text"
+                placeholder="label (e.g. Running)"
+                value={entry.label}
+                onChange={(e) => handleEntryChange(key, i, 'label', e.target.value)}
+                className={styles.input}
+                disabled={disabled}
+              />
+              <button
+                type="button"
+                className={styles.dangerButton}
+                onClick={() => handleRemoveEntry(key, i)}
+                disabled={disabled}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className={styles.secondaryButton}
+            onClick={() => handleAddEntry(key)}
+            disabled={disabled}
+            style={{ fontSize: '0.85rem' }}
+          >
+            + Add mapping
+          </button>
+        </div>
+      ))}
+
+      {/* Add stream key row */}
+      <div className={styles.inlineFields} style={{ marginTop: '0.25rem' }}>
+        <input
+          type="text"
+          list="sim-key-suggestions"
+          placeholder="stream key (e.g. motor_status)"
+          value={newKey}
+          onChange={(e) => setNewKey(e.target.value)}
+          className={styles.input}
+          disabled={disabled}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddKey(); } }}
+        />
+        <datalist id="sim-key-suggestions">
+          {suggestedKeys.map((k) => <option key={k} value={k} />)}
+        </datalist>
+        <button
+          type="button"
+          className={styles.secondaryButton}
+          onClick={handleAddKey}
+          disabled={disabled || !newKey.trim()}
+        >
+          + Add stream key
+        </button>
+      </div>
+    </div>
+  );
+}
+
+StatusIndicatorMappingsEditor.propTypes = {
+  value: PropTypes.object.isRequired,
+  onChange: PropTypes.func.isRequired,
+  streamTypeDefinitions: PropTypes.array,
+  disabled: PropTypes.bool,
+};
+
+// ---------------------------------------------------------------------------
 // Shared form fields used by both Create and Edit forms
 // ---------------------------------------------------------------------------
 
@@ -484,6 +638,20 @@ function DeviceTypeFormFields({ fields, setFields, disabled }) {
           disabled={disabled}
         />
       </div>
+      <div className={styles.field}>
+        <p className={styles.label} style={{ marginBottom: '0.25rem' }}>
+          Status indicator mappings
+        </p>
+        <p style={{ fontSize: '0.8125rem', color: '#6B7280', marginBottom: '0.5rem' }}>
+          Per-stream value → colour/label mappings for the Status Indicator dashboard widget.
+        </p>
+        <StatusIndicatorMappingsEditor
+          value={fields.status_indicator_mappings}
+          onChange={(v) => setFields((f) => ({ ...f, status_indicator_mappings: v }))}
+          streamTypeDefinitions={fields.stream_type_definitions}
+          disabled={disabled}
+        />
+      </div>
     </>
   );
 }
@@ -511,6 +679,7 @@ function CreateDeviceTypeForm({ onDone }) {
     is_active: true,
     stream_type_definitions: [],
     commands: [],
+    status_indicator_mappings: {},
   });
   const [error, setError] = useState('');
 
@@ -573,6 +742,7 @@ function EditDeviceTypeForm({ deviceType, onDone }) {
     is_active: deviceType.is_active ?? true,
     stream_type_definitions: deviceType.stream_type_definitions || [],
     commands: deviceType.commands || [],
+    status_indicator_mappings: deviceType.status_indicator_mappings || {},
   });
   const [error, setError] = useState('');
 

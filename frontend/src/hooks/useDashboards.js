@@ -120,6 +120,27 @@ export function useStreamReadings(streamId, params = {}, queryOptions = {}) {
 }
 
 /**
+ * Fetch a synthetic online/offline timeline for a device.
+ * Derived from StreamReading timestamps by the backend.
+ *
+ * @param {number|null} deviceId - Device PK to query.
+ * @param {object} params - Query params: { time_range } or { from, to }.
+ * @param {object} queryOptions - Additional React Query options (e.g. refetchInterval).
+ * @returns {{ timeline: Array<{timestamp, is_online}>, bucket_minutes: number }}
+ */
+export function useDeviceHealthHistory(deviceId, params = {}, queryOptions = {}) {
+  return useQuery({
+    queryKey: ['device-health-history', deviceId, params],
+    queryFn: () =>
+      api
+        .get(`/api/v1/devices/${deviceId}/health-history/`, { params })
+        .then((r) => r.data),
+    enabled: !!deviceId,
+    ...queryOptions,
+  });
+}
+
+/**
  * Fetch readings for multiple streams in parallel.
  *
  * @param {Array<{stream_id: number}>} streamConfigs - Array of stream config objects.
