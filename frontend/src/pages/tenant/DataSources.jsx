@@ -166,6 +166,7 @@ function WizardStep2({ ds, provider, sites, onNext, onBack }) {
   const [selected, setSelected] = useState({});
   const [siteAssignments, setSiteAssignments] = useState({});
   const [defaultSiteId, setDefaultSiteId] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState('');
 
   const handleDiscover = async () => {
@@ -195,17 +196,35 @@ function WizardStep2({ ds, provider, sites, onNext, onBack }) {
     });
   };
 
+  // Filter discovered devices by search term (name or external ID, case-insensitive)
+  const filteredDevices = (discovered || []).filter((d) => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      (d.external_device_name || '').toLowerCase().includes(term) ||
+      d.external_device_id.toLowerCase().includes(term)
+    );
+  });
+
+  const filteredAvailable = filteredDevices.filter((d) => !d.already_connected);
+  const totalAvailableCount = (discovered || []).filter((d) => !d.already_connected).length;
+
   const toggleAll = (checked) => {
-    const next = {};
-    (discovered || []).filter((d) => !d.already_connected).forEach((d) => {
-      next[d.external_device_id] = checked;
+    // Only toggle devices visible in the current filtered view
+    setSelected((prev) => {
+      const next = { ...prev };
+      filteredAvailable.forEach((d) => { next[d.external_device_id] = checked; });
+      return next;
     });
-    setSelected(next);
   };
 
   const selectedDevices = (discovered || []).filter(
     (d) => !d.already_connected && selected[d.external_device_id],
   );
+
+  const allFilteredSelected =
+    filteredAvailable.length > 0 &&
+    filteredAvailable.every((d) => selected[d.external_device_id]);
 
   const handleNext = () => {
     if (!selectedDevices.length) { setError('Select at least one device.'); return; }
@@ -220,8 +239,15 @@ function WizardStep2({ ds, provider, sites, onNext, onBack }) {
     })));
   };
 
-  const availableCount = (discovered || []).filter((d) => !d.already_connected).length;
-  const allSelected = availableCount > 0 && selectedDevices.length === availableCount;
+  const countLabel = (() => {
+    if (!discovered) return '';
+    const isFiltered = searchTerm.trim() && filteredDevices.length !== discovered.length;
+    const filteredSelectedCount = filteredAvailable.filter((d) => selected[d.external_device_id]).length;
+    if (isFiltered) {
+      return `Showing ${filteredDevices.length} of ${discovered.length} — ${selectedDevices.length} selected (${filteredSelectedCount} in view)`;
+    }
+    return `${selectedDevices.length} of ${totalAvailableCount} device(s) selected.`;
+  })();
 
   return (
     <div>
@@ -257,73 +283,90 @@ function WizardStep2({ ds, provider, sites, onNext, onBack }) {
                 {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
+            <div className={styles.field}>
+              <label className={styles.label}>Search devices</label>
+              <input
+                type="search"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={styles.input}
+                placeholder="Filter by name or ID…"
+              />
+            </div>
           </div>
 
-          <table className={styles.table}>
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={(e) => toggleAll(e.target.checked)}
-                    disabled={availableCount === 0}
-                  />
-                </th>
-                <th>Device name</th>
-                <th>External ID</th>
-                <th>Site</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {discovered.map((d) => (
-                <tr key={d.external_device_id} style={{ opacity: d.already_connected ? 0.5 : 1 }}>
-                  <td>
+          {filteredDevices.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              No devices match &ldquo;{searchTerm}&rdquo;.
+            </p>
+          ) : (
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>
                     <input
                       type="checkbox"
-                      checked={!d.already_connected && !!selected[d.external_device_id]}
-                      onChange={(e) =>
-                        setSelected((s) => ({ ...s, [d.external_device_id]: e.target.checked }))
-                      }
-                      disabled={d.already_connected}
+                      checked={allFilteredSelected}
+                      onChange={(e) => toggleAll(e.target.checked)}
+                      disabled={filteredAvailable.length === 0}
+                      title="Select/deselect all visible devices"
                     />
-                  </td>
-                  <td>{d.external_device_name || '—'}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{d.external_device_id}</td>
-                  <td>
-                    {d.already_connected ? (
-                      <span style={{ color: 'var(--text-muted)' }}>Already connected</span>
-                    ) : (
-                      <select
-                        value={siteAssignments[d.external_device_id] || defaultSiteId}
-                        onChange={(e) =>
-                          setSiteAssignments((a) => ({
-                            ...a,
-                            [d.external_device_id]: e.target.value,
-                          }))
-                        }
-                        className={styles.input}
-                        style={{ padding: '0.2rem 0.4rem', fontSize: '0.85rem' }}
-                        disabled={!selected[d.external_device_id]}
-                      >
-                        <option value="">— Site —</option>
-                        {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    )}
-                  </td>
-                  <td>
-                    {d.already_connected && (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Connected</span>
-                    )}
-                  </td>
+                  </th>
+                  <th>Device name</th>
+                  <th>External ID</th>
+                  <th>Site</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredDevices.map((d) => (
+                  <tr key={d.external_device_id} style={{ opacity: d.already_connected ? 0.5 : 1 }}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={!d.already_connected && !!selected[d.external_device_id]}
+                        onChange={(e) =>
+                          setSelected((s) => ({ ...s, [d.external_device_id]: e.target.checked }))
+                        }
+                        disabled={d.already_connected}
+                      />
+                    </td>
+                    <td>{d.external_device_name || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>{d.external_device_id}</td>
+                    <td>
+                      {d.already_connected ? (
+                        <span style={{ color: 'var(--text-muted)' }}>Already connected</span>
+                      ) : (
+                        <select
+                          value={siteAssignments[d.external_device_id] || defaultSiteId}
+                          onChange={(e) =>
+                            setSiteAssignments((a) => ({
+                              ...a,
+                              [d.external_device_id]: e.target.value,
+                            }))
+                          }
+                          className={styles.input}
+                          style={{ padding: '0.2rem 0.4rem', fontSize: '0.85rem' }}
+                          disabled={!selected[d.external_device_id]}
+                        >
+                          <option value="">— Site —</option>
+                          {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        </select>
+                      )}
+                    </td>
+                    <td>
+                      {d.already_connected && (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Connected</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.5rem' }}>
-            {selectedDevices.length} of {availableCount} device(s) selected.
+            {countLabel}
           </p>
           {error && <p className={styles.error}>{error}</p>}
 

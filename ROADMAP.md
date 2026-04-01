@@ -361,6 +361,27 @@
 
 ---
 
+### Sprint 14a — Discovery Device Search & Filter
+
+**Goal:** Tenant Admins can search through large discovery result sets before selecting devices to connect.
+
+**Context:** Providers with large fleets (e.g. 500+ devices) make the flat discovery table unusable without filtering. This is a frontend-only improvement — the backend `POST /api/v1/data-sources/:id/discover/` endpoint already returns the full list in one response; filtering happens client-side.
+
+**Deliverables:**
+- [ ] Frontend: Search input rendered above the device table in `WizardStep2` after discovery completes — filters by device name or external ID (case-insensitive, partial match)
+- [ ] Frontend: "Select all" checkbox applies only to visible (filtered) non-connected devices
+- [ ] Frontend: Selection count label reflects filtered view ("Showing X of Y — Z selected")
+- [ ] Frontend: Existing per-device selections are preserved when the search term changes (deselecting a filter reveals previously selected devices with their state intact)
+- [ ] Frontend: Same search behaviour applied to the `AddDevicesFlow` (re-discovery on an existing DataSource)
+
+**Definition of Done:**
+- With 500 discovered devices, typing in the search box filters the table in real time with no lag
+- "Select all" with an active filter selects only filtered devices; clearing the filter shows all devices with their correct selected state
+- The count label stays accurate as the filter and selections change
+- No backend changes — existing tests continue to pass with no modifications
+
+---
+
 ### Sprint 15 — Rule Builder Frontend
 
 **Goal:** Tenant Admin can build a complete rule using the visual step-flow interface.

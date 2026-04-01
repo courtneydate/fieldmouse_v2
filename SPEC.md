@@ -458,6 +458,7 @@ _Phase A — Select & assign devices_
 - [ ] Tenant Admin picks a provider from the library and enters credentials (form auto-generated from provider's `auth_param_schema`)
 - [ ] On credential submission, platform calls the discovery endpoint and returns the list of devices found on that account
 - [ ] Tenant Admin sets a **default site** for all discovered devices (dropdown), with per-device site override per row
+- [ ] When discovery returns a large result set, Tenant Admin can **search/filter the device list** by device name or external ID — filtering is client-side (no additional API call); the search input appears above the device table after discovery completes; "select all" and the selection count reflect only the currently visible (filtered) devices
 - [ ] Tenant Admin selects which devices to connect via checkboxes (select-all supported)
 - [ ] Virtual devices are auto-named `{ProviderName} — {external_device_name}` (editable later from device detail)
 
