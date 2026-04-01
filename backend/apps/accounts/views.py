@@ -22,7 +22,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairView, TokenRefreshView
 
 from .models import NotificationGroup, NotificationGroupMember, Tenant, TenantUser
-from .permissions import IsThatPlaceAdmin, IsTenantAdmin, IsViewOnly
+from .permissions import IsTenantAdmin, IsThatPlaceAdmin, IsViewOnly
 from .serializers import (
     AcceptInviteSerializer,
     AddMemberSerializer,

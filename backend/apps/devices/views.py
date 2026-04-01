@@ -7,7 +7,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.accounts.permissions import IsThatPlaceAdmin, IsTenantAdmin, IsViewOnly
+from apps.accounts.permissions import IsTenantAdmin, IsThatPlaceAdmin, IsViewOnly
 
 from .models import Device, DeviceHealth, DeviceType, Site
 from .serializers import DeviceHealthSerializer, DeviceSerializer, DeviceTypeSerializer, SiteSerializer
