@@ -204,7 +204,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     'poll-datasource-devices': {
         'task': 'integrations.poll_datasource_devices',
-        'schedule': 60.0,  # every 60 seconds — task self-throttles per provider interval
+        'schedule': 30.0,  # every 30 seconds — task self-throttles per device interval
     },
 }
 

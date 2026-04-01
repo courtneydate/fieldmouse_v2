@@ -18,6 +18,7 @@ Devices (tenant-scoped):
     POST   /api/v1/devices/              — register device (creates as pending)
     GET    /api/v1/devices/{id}/         — retrieve device
     PUT    /api/v1/devices/{id}/         — update device
+    PATCH  /api/v1/devices/{id}/         — partial update device (e.g. name only)
     DELETE /api/v1/devices/{id}/         — delete device
     POST   /api/v1/devices/{id}/approve/ — approve device (FM Admin only)
     POST   /api/v1/devices/{id}/reject/  — reject device (FM Admin only)

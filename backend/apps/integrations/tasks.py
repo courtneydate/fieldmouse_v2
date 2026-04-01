@@ -1,6 +1,6 @@
 """Celery tasks for 3rd-party API polling.
 
-poll_datasource_devices — beat task, runs every 60 s. Finds all active
+poll_datasource_devices — beat task, runs every 30 s. Finds all active
     DataSourceDevices due for polling and dispatches individual poll tasks.
 
 poll_single_device — polls one DataSourceDevice, extracts values via JSONPath,
@@ -38,7 +38,8 @@ def poll_datasource_devices() -> None:
 
     A device is due when:
       - It has never been polled (last_polled_at is None), or
-      - Time since last poll >= provider's default_poll_interval_seconds.
+      - Time since last poll >= the device's poll_interval_seconds (falls back
+        to provider's default_poll_interval_seconds when null).
 
     Dispatching is staggered per provider using Celery countdown to respect the
     provider's max_requests_per_second rate limit and avoid thundering-herd 429s.
@@ -60,7 +61,7 @@ def poll_datasource_devices() -> None:
     due_by_provider = defaultdict(list)
     for dsd in devices:
         provider = dsd.datasource.provider
-        interval = provider.default_poll_interval_seconds
+        interval = dsd.poll_interval_seconds or provider.default_poll_interval_seconds
         if dsd.last_polled_at is None:
             due = True
         else:

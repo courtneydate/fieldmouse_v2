@@ -198,6 +198,23 @@ class DeviceViewSet(viewsets.GenericViewSet):
         serializer.save()
         return Response(DeviceSerializer(device).data)
 
+    def partial_update(self, request, pk=None):
+        """PATCH /api/v1/devices/:id/ — partially update a device. Tenant Admin only.
+
+        Accepts any subset of writable fields (e.g. just name).
+        """
+        device = get_object_or_404(self.get_queryset(), pk=pk)
+        serializer = DeviceSerializer(
+            device, data=request.data, partial=True, context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        logger.info(
+            'Device "%s" (id=%s) partially updated by %s: %s',
+            device.name, device.pk, request.user.email, list(request.data.keys()),
+        )
+        return Response(DeviceSerializer(device).data)
+
     def destroy(self, request, pk=None):
         """DELETE /api/v1/devices/:id/ — delete a device. Tenant Admin only."""
         device = get_object_or_404(self.get_queryset(), pk=pk)

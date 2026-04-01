@@ -44,6 +44,15 @@ export function useRejectDevice() {
   });
 }
 
+export function useUpdateDevice() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ deviceId, data }) =>
+      api.patch(`/api/v1/devices/${deviceId}/`, data).then((r) => r.data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: DEVICES_KEY }),
+  });
+}
+
 export function useDeleteDevice() {
   const queryClient = useQueryClient();
   return useMutation({

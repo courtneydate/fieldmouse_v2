@@ -181,6 +181,7 @@ class DataSourceDeviceSerializer(serializers.ModelSerializer):
             'virtual_device',
             'virtual_device_detail',
             'active_stream_keys',
+            'poll_interval_seconds',
             'last_polled_at',
             'last_poll_status',
             'last_poll_error',

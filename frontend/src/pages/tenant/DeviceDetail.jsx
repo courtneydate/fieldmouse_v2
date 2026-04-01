@@ -10,8 +10,7 @@ import { useState } from 'react';
 import PropTypes from 'prop-types';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { useDevices } from '../../hooks/useDevices';
-import { useDeviceHealth } from '../../hooks/useDevices';
+import { useDeviceHealth, useDevices, useUpdateDevice } from '../../hooks/useDevices';
 import { useDeviceStreams, useUpdateStream } from '../../hooks/useStreams';
 import styles from '../admin/AdminPage.module.css';
 import detailStyles from './DeviceDetail.module.css';
@@ -88,9 +87,71 @@ TabBar.propTypes = {
 // Info tab
 // ---------------------------------------------------------------------------
 
-function InfoTab({ device }) {
+function InfoTab({ device, canEdit }) {
+  const updateDevice = useUpdateDevice();
+  const [name, setName] = useState(device.name);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    const trimmed = name.trim();
+    if (!trimmed) { setError('Name cannot be blank.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await updateDevice.mutateAsync({ deviceId: device.id, data: { name: trimmed } });
+      setEditing(false);
+    } catch {
+      setError('Failed to save name.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setName(device.name);
+    setEditing(false);
+    setError('');
+  };
+
   return (
     <div className={detailStyles.infoGrid}>
+      <div className={detailStyles.infoItem}>
+        <span className={detailStyles.infoLabel}>Device name</span>
+        {canEdit && editing ? (
+          <span className={detailStyles.infoValue} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className={styles.input}
+              style={{ padding: '0.2rem 0.4rem', fontSize: '0.9rem', width: '16rem' }}
+              disabled={saving}
+              autoFocus
+            />
+            <button className={styles.primaryButton} onClick={handleSave} disabled={saving}
+              style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem' }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button className={styles.secondaryButton} onClick={handleCancel} disabled={saving}
+              style={{ fontSize: '0.8rem', padding: '0.2rem 0.6rem' }}>
+              Cancel
+            </button>
+            {error && <span style={{ color: 'var(--danger)', fontSize: '0.85rem' }}>{error}</span>}
+          </span>
+        ) : (
+          <span className={detailStyles.infoValue} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {device.name}
+            {canEdit && (
+              <button className={styles.secondaryButton} onClick={() => setEditing(true)}
+                style={{ fontSize: '0.75rem', padding: '0.15rem 0.5rem' }}>
+                Rename
+              </button>
+            )}
+          </span>
+        )}
+      </div>
       <div className={detailStyles.infoItem}>
         <span className={detailStyles.infoLabel}>Serial number</span>
         <span className={`${detailStyles.infoValue} ${styles.mono}`}>{device.serial_number}</span>
@@ -115,7 +176,10 @@ function InfoTab({ device }) {
   );
 }
 
-InfoTab.propTypes = { device: PropTypes.object.isRequired };
+InfoTab.propTypes = {
+  device: PropTypes.object.isRequired,
+  canEdit: PropTypes.bool.isRequired,
+};
 
 // ---------------------------------------------------------------------------
 // Health tab
@@ -366,7 +430,7 @@ function DeviceDetail() {
       <TabBar active={activeTab} onChange={setActiveTab} />
 
       <section className={styles.section}>
-        {activeTab === 'Info' && device && <InfoTab device={device} />}
+        {activeTab === 'Info' && device && <InfoTab device={device} canEdit={isAdmin} />}
         {activeTab === 'Info' && !device && !devicesLoading && (
           <p className={styles.empty}>Device not found.</p>
         )}

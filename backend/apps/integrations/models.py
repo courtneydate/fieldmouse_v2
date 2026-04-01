@@ -210,6 +210,15 @@ class DataSourceDevice(models.Model):
         default=list,
         help_text='Subset of provider available_streams keys the tenant has activated.',
     )
+    poll_interval_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(30)],
+        help_text=(
+            'Per-device poll interval override (seconds, minimum 30). '
+            'When null, the provider default_poll_interval_seconds is used.'
+        ),
+    )
     last_polled_at = models.DateTimeField(null=True, blank=True)
     last_poll_status = models.CharField(
         max_length=20,
